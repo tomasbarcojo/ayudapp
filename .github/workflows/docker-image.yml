@@ -1,0 +1,152 @@
+name: CI/CD Workflow - API
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  adm-app-api:
+    runs-on: ubuntu-latest
+    environment: develop
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Set Environment Variables
+        run: |
+          echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY=activa-api" >> $GITHUB_ENV
+          echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "DEPLOY_NAME=api" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+      
+      # - name: Build, tag, and push API image to Amazon ECR
+      #   run: |
+      #     docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_NAME-$BRANCH_NAME-$IMAGE_TAG .
+      #     docker push $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_NAME-$BRANCH_NAME-$IMAGE_TAG
+
+      # - name: Replace image name in task definition for API
+      #   env:
+      #       IMAGE_NAME_API: "@@IMAGE_NAME_API@@"
+      #       DATABASE_CLIENT: ${{ secrets.DATABASE_CLIENT }}
+      #   run: |
+      #       NEW_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:api-$BRANCH_NAME-$IMAGE_TAG"
+      #       echo "New image for API: $NEW_IMAGE"
+      #       sed -i "s|@@IMAGE_NAME_API@@|$NEW_IMAGE|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_PORT@@|$DATABASE_PORT|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_PASSWORD@@|$DATABASE_PASSWORD|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_USER@@|$DATABASE_USER|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_CLIENT@@|$DATABASE_CLIENT|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_NAME@@|$DATABASE_NAME|g" .aws/task-definition.json
+      #       sed -i "s|@@NODE_ENV@@|$NODE_ENV|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_HOST@@|$DATABASE_HOST|g" .aws/task-definition.json
+      #       sed -i "s|@@DATABASE_LOG@@|$DATABASE_LOG|g" .aws/task-definition.json
+      #       sed -i "s|@@OTL_ACTIVATE_SDK_AUTO_INSTRUMENTATION@@|$OTL_ACTIVATE_SDK_AUTO_INSTRUMENTATION|g" .aws/task-definition.json
+      #       sed -i "s|@@RADIO_BASE_SAMPLER@@|$RADIO_BASE_SAMPLER|g" .aws/task-definition.json
+      #       sed -i "s|@@JWT_SECRET_KEY@@|$JWT_SECRET_KEY|g" .aws/task-definition.json
+      #       sed -i "s|@@JWT_EXPIRATION_TIME@@|$JWT_EXPIRATION_TIME|g" .aws/task-definition.json
+      #       sed -i "s|@@CACHE_TTL@@|$CACHE_TTL|g" .aws/task-definition.json
+      #       sed -i "s|@@MULTER_DEST@@|$MULTER_DEST|g" .aws/task-definition.json
+
+      - name: Set new image name
+        run: |
+          NEW_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:api-$BRANCH_NAME-$IMAGE_TAG"
+          echo "New image for API: $NEW_IMAGE"
+      
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: .aws/task-definition.json
+          container-name: test-ecs
+          image: $NEW_IMAGE
+          # environment-variables: |
+          #     DATABASE_PORT=$DATABASE_PORT
+          #     DATABASE_PASSWORD=$DATABASE_PASSWORD
+          #     DATABASE_PASSWORD=$DATABASE_PASSWORD
+          #     DATABASE_USER=$DATABASE_USER
+          #     DATABASE_CLIENT=$DATABASE_CLIENT
+          #     DATABASE_NAME=$DATABASE_NAME
+          #     NODE_ENV=$NODE_ENV
+          #     DATABASE_HOST=$DATABASE_HOST
+          #     DATABASE_LOG=$DATABASE_LOG
+          #     OTL_ACTIVATE_SDK_AUTO_INSTRUMENTATION=$OTL_ACTIVATE_SDK_AUTO_INSTRUMENTATION
+          #     RADIO_BASE_SAMPLER=$RADIO_BASE_SAMPLER
+          #     JWT_SECRET_KEY=$JWT_SECRET_KEY
+          #     JWT_EXPIRATION_TIME=$JWT_EXPIRATION_TIME
+          #     CACHE_TTL=$CACHE_TTL
+          #     MULTER_DEST=$MULTER_DEST
+
+      - name: Print task-definition.json for API
+        run: cat .aws/task-definition.json
+
+      - name: Deploy API to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+            task-definition: .aws/task-definition-api.json
+            service: activa-api-service
+            cluster: activa-api
+            wait-for-service-stability: true
+  
+
+  # deploy-web:
+  #   runs-on: ubuntu-latest
+  #   environment: test
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
+      
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v1
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: us-east-2
+      
+  #     - name: Login to Amazon ECR
+  #       id: login-ecr
+  #       uses: aws-actions/amazon-ecr-login@v1
+
+  #     - name: Set Environment Variables
+  #       run: |
+  #         echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
+  #         echo "ECR_REPOSITORY=salallena-repository" >> $GITHUB_ENV
+  #         echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+  #         echo "DEPLOY_NAME=web" >> $GITHUB_ENV
+  #         echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+      
+  #     - name: Build, tag, and push Web image to Amazon ECR
+  #       run: |
+  #         docker build -f apps/web/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_NAME-$BRANCH_NAME-$IMAGE_TAG .
+  #         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_NAME-$BRANCH_NAME-$IMAGE_TAG
+
+  #     - name: Replace image name in task definition for Web
+  #       env:
+  #           IMAGE_NAME_WEB: "@@IMAGE_NAME_WEB@@"
+  #       run: |
+  #           NEW_IMAGE_WEB="$ECR_REGISTRY/$ECR_REPOSITORY:web-$BRANCH_NAME-$IMAGE_TAG"
+  #           echo "New image for Web: $NEW_IMAGE_WEB"
+  #           sed -i "s|@@IMAGE_NAME_WEB@@|$NEW_IMAGE_WEB|g" .aws/task-definition-web.json
+          
+  #     - name: Print task-definition-web.json for Web
+  #       run: cat .aws/task-definition-web.json
+
+  #     - name: Deploy Web to ECS
+  #       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+  #       with:
+  #           task-definition: .aws/task-definition-web.json
+  #           service: service-web
+  #           cluster: salallena-cluster
+  #           wait-for-service-stability: true
